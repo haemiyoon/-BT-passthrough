@@ -3,64 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yoga Pro: Persistent Mixer</title>
+    <title>Yoga Pro: Mic-First Mixer</title>
     <style>
         :root { --primary: #0ea5e9; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --mic-accent: #10b981; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
         
         .header-card { background: var(--card); padding: 20px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
         
-        button#micBtn { background: var(--primary); color: white; border: none; padding: 18px; border-radius: 15px; font-size: 1.1rem; font-weight: 800; width: 100%; cursor: pointer; margin-bottom: 10px; }
+        button#micBtn { background: var(--primary); color: white; border: none; padding: 18px; border-radius: 15px; font-size: 1.1rem; font-weight: 800; width: 100%; cursor: pointer; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
         
         .mixer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 5px; }
         .vol-box { background: #334155; padding: 12px; border-radius: 12px; text-align: center; }
         
         label { display: block; font-size: 0.7rem; color: #94a3b8; margin-bottom: 8px; font-weight: 800; text-transform: uppercase; }
         input[type="range"] { width: 100%; height: 10px; border-radius: 10px; background: #475569; outline: none; accent-color: var(--primary); -webkit-appearance: none; }
+        #micVol { accent-color: var(--mic-accent); }
         
         .file-controls { display: flex; gap: 10px; margin-top: 15px; }
-        .custom-file-upload { flex: 2; background: #334155; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; }
+        .custom-file-upload { flex: 2; background: #334155; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; display: flex; align-items: center; justify-content: center; }
         .clear-btn { flex: 1; background: #475569; color: white; border: none; border-radius: 12px; font-size: 0.7rem; font-weight: bold; cursor: pointer; }
         
         .playlist { flex-grow: 1; overflow-y: auto; background: var(--card); border-radius: 20px; padding: 10px; margin-top: 10px; border: 1px solid #334155; }
-        .song-item { padding: 18px; margin-bottom: 8px; background: #475569; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; position: relative; }
-        .song-item.active { border-left: 5px solid var(--primary); background: #0c4a6e; }
-        .delete-song { color: #ef4444; font-weight: bold; padding: 5px 10px; }
+        .song-item { padding: 18px; margin-bottom: 8px; background: #475569; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid transparent; }
+        .song-item.active { border-color: var(--primary); background: #0c4a6e; }
+        .song-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; }
+        .delete-song { color: #ef4444; font-weight: bold; padding: 5px 15px; font-size: 1.2rem; }
         
-        #status-bar { text-align: center; font-size: 0.75rem; color: #10b981; margin-top: 10px; font-weight: bold; }
+        #status-bar { text-align: center; font-size: 0.75rem; color: #94a3b8; margin-top: 10px; }
+        .live-pulse { color: #10b981; font-weight: 800; }
     </style>
 </head>
 <body>
 
     <div class="header-card">
-        <button id="micBtn">1. ACTIVATE CLASS SYSTEM</button>
+        <button id="micBtn">START SYSTEM (MIC ON)</button>
         
         <div class="mixer-grid">
             <div class="vol-box">
-                <label>Voice</label>
+                <label>Voice (Mic)</label>
                 <input type="range" id="micVol" min="0" max="2" step="0.1" value="1.0">
             </div>
             <div class="vol-box">
-                <label>Music</label>
+                <label>Music Track</label>
                 <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.4">
             </div>
         </div>
 
         <div class="file-controls">
             <label class="custom-file-upload">
-                ADD SONGS (A-Z SORT)
+                + ADD MUSIC (OPTIONAL)
                 <input type="file" id="filePicker" multiple accept="*/*" style="display:none;">
             </label>
-            <button class="clear-btn" id="clearList">CLEAR ALL</button>
+            <button class="clear-btn" id="clearList">RESET LIST</button>
         </div>
-        <div id="status-bar">Ready for Yoga...</div>
+        <div id="status-bar">System Standby</div>
     </div>
 
     <div class="playlist" id="playlistUI"></div>
 
     <script>
         let audioCtx, currentMusicSource, musicGain, micGain, wakeLock = null;
-        let songFiles = []; // This holds the actual File objects
+        let songFiles = [];
 
         const micBtn = document.getElementById('micBtn');
         const status = document.getElementById('status-bar');
@@ -70,66 +73,77 @@
         const micVolSlider = document.getElementById('micVol');
         const clearBtn = document.getElementById('clearList');
 
-        // Initial setup
         renderPlaylist();
 
         micBtn.onclick = async () => {
             if (!audioCtx) {
                 try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
+                    
+                    // Request Wake Lock to keep screen on
+                    if ('wakeLock' in navigator) {
+                        try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+                    }
 
+                    // 1. Setup Music Gain Node
                     musicGain = audioCtx.createGain();
                     musicGain.gain.value = musicVolSlider.value;
                     musicGain.connect(audioCtx.destination);
 
+                    // 2. Setup Mic Gain Node
                     micGain = audioCtx.createGain();
                     micGain.gain.value = micVolSlider.value;
                     micGain.connect(audioCtx.destination);
 
+                    // 3. Request Mic Access (Lightning/USB Receiver)
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                        audio: { 
+                            echoCancellation: false, 
+                            noiseSuppression: false, 
+                            autoGainControl: false 
+                        } 
                     });
                     
                     const micSource = audioCtx.createMediaStreamSource(stream);
                     micSource.connect(micGain);
 
-                    micBtn.innerText = "SYSTEM LIVE & AWAKE";
+                    micBtn.innerText = "SYSTEM ACTIVE";
                     micBtn.style.background = "#10b981";
-                    status.innerText = "SCREEN ON - MIC LIVE";
+                    status.innerHTML = '<span class="live-pulse">● LIVE</span> - Mic is active';
                 } catch (err) {
-                    alert("Activation Error: " + err.message);
+                    alert("System failed to start. Check permissions.");
                 }
             }
         };
 
         filePicker.onchange = (e) => {
             const newFiles = Array.from(e.target.files);
-            // Combine with existing, filter duplicates by name
             const combined = [...songFiles, ...newFiles];
+            // Sort Alphabetically
             songFiles = combined.filter((v,i,a)=>a.findIndex(t=>(t.name===v.name))===i);
-            
-            // SORT ALPHABETICALLY
             songFiles.sort((a, b) => a.name.localeCompare(b.name));
-            
             renderPlaylist();
         };
 
         clearBtn.onclick = () => {
+            if(currentMusicSource) currentMusicSource.stop();
             songFiles = [];
             renderPlaylist();
         };
 
-        function deleteSong(index, event) {
-            event.stopPropagation(); // Don't play the song when clicking delete
+        window.deleteSong = (index, event) => {
+            event.stopPropagation();
+            if (document.querySelectorAll('.song-item')[index].classList.contains('active')) {
+                if(currentMusicSource) currentMusicSource.stop();
+            }
             songFiles.splice(index, 1);
             renderPlaylist();
-        }
+        };
 
         function renderPlaylist() {
             playlistUI.innerHTML = "";
             if (songFiles.length === 0) {
-                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist Empty</p>';
+                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist empty. Use the + button above to add tracks.</p>';
                 return;
             }
             songFiles.forEach((file, index) => {
@@ -145,7 +159,7 @@
         }
 
         async function playSong(index) {
-            if (!audioCtx) return alert("Tap 'ACTIVATE' first!");
+            if (!audioCtx) return alert("Tap 'START SYSTEM' first!");
             if (currentMusicSource) try { currentMusicSource.stop(); } catch(e) {}
 
             try {
@@ -161,9 +175,9 @@
                 document.querySelectorAll('.song-item').forEach((el, i) => {
                     el.classList.toggle('active', i === index);
                 });
-                status.innerText = "Playing: " + file.name;
+                status.innerHTML = `<span class="live-pulse">● LIVE</span> - Playing: ${file.name}`;
             } catch (err) {
-                status.innerText = "Error playing file.";
+                status.innerText = "Playback error.";
             }
         }
 
