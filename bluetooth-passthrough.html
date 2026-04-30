@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yoga Pro: Balanced Mixer</title>
+    <title>Yoga Pro: Full Control Mixer</title>
     <style>
-        :root { --primary: #0ea5e9; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --mic-accent: #10b981; }
+        :root { --primary: #0ea5e9; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --mic-accent: #10b981; --warn: #ef4444; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
         
         .header-card { background: var(--card); padding: 20px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
@@ -19,15 +19,18 @@
         input[type="range"] { width: 100%; height: 10px; border-radius: 10px; background: #475569; outline: none; accent-color: var(--primary); -webkit-appearance: none; }
         #micVol { accent-color: var(--mic-accent); }
         
-        .file-controls { display: flex; gap: 10px; margin-top: 15px; }
-        .custom-file-upload { flex: 2; background: #334155; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; display: flex; align-items: center; justify-content: center; }
-        .clear-btn { flex: 1; background: #475569; color: white; border: none; border-radius: 12px; font-size: 0.7rem; font-weight: bold; cursor: pointer; }
+        .action-bar { display: flex; gap: 10px; margin-top: 15px; }
+        .btn-pause { flex: 2; background: #f59e0b; color: white; border: none; border-radius: 12px; font-weight: 800; cursor: pointer; padding: 12px; }
+        .btn-reset { flex: 1; background: #475569; color: white; border: none; border-radius: 12px; font-size: 0.7rem; font-weight: bold; cursor: pointer; }
+
+        .file-controls { margin-top: 15px; }
+        .custom-file-upload { display: block; background: #334155; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; }
         
         .playlist { flex-grow: 1; overflow-y: auto; background: var(--card); border-radius: 20px; padding: 10px; margin-top: 10px; border: 1px solid #334155; }
         .song-item { padding: 18px; margin-bottom: 8px; background: #475569; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; border: 1px solid transparent; }
         .song-item.active { border-color: var(--primary); background: #0c4a6e; }
         .song-name { font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 75%; }
-        .delete-song { color: #ef4444; font-weight: bold; padding: 5px 15px; font-size: 1.2rem; }
+        .delete-song { color: var(--warn); font-weight: bold; padding: 5px 15px; font-size: 1.2rem; }
         
         #status-bar { text-align: center; font-size: 0.75rem; color: #94a3b8; margin-top: 10px; }
         .live-pulse { color: #10b981; font-weight: 800; }
@@ -49,12 +52,16 @@
             </div>
         </div>
 
+        <div class="action-bar">
+            <button class="btn-pause" id="pauseBtn">STOP MUSIC</button>
+            <button class="btn-reset" id="clearList">RESET ALL</button>
+        </div>
+
         <div class="file-controls">
             <label class="custom-file-upload">
-                + ADD MUSIC
+                + ADD MUSIC TRACKS
                 <input type="file" id="filePicker" multiple accept="*/*" style="display:none;">
             </label>
-            <button class="clear-btn" id="clearList">RESET</button>
         </div>
         <div id="status-bar">System Standby</div>
     </div>
@@ -66,6 +73,7 @@
         let songFiles = [];
 
         const micBtn = document.getElementById('micBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
         const status = document.getElementById('status-bar');
         const filePicker = document.getElementById('filePicker');
         const playlistUI = document.getElementById('playlistUI');
@@ -79,32 +87,33 @@
             if (!audioCtx) {
                 try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    
                     if ('wakeLock' in navigator) {
                         try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
                     }
-
                     musicGain = audioCtx.createGain();
                     musicGain.gain.value = musicVolSlider.value;
                     musicGain.connect(audioCtx.destination);
-
                     micGain = audioCtx.createGain();
                     micGain.gain.value = micVolSlider.value;
                     micGain.connect(audioCtx.destination);
-
                     const stream = await navigator.mediaDevices.getUserMedia({ 
                         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                     });
-                    
                     const micSource = audioCtx.createMediaStreamSource(stream);
                     micSource.connect(micGain);
-
                     micBtn.innerText = "SYSTEM ACTIVE";
                     micBtn.style.background = "#10b981";
-                    status.innerHTML = '<span class="live-pulse">● LIVE</span> - Ready for Class';
-                } catch (err) {
-                    alert("Check microphone permissions.");
-                }
+                    status.innerHTML = '<span class="live-pulse">● LIVE</span> - System Ready';
+                } catch (err) { alert("Check mic permissions."); }
+            }
+        };
+
+        pauseBtn.onclick = () => {
+            if (currentMusicSource) {
+                currentMusicSource.stop();
+                currentMusicSource = null;
+                document.querySelectorAll('.song-item').forEach(el => el.classList.remove('active'));
+                status.innerHTML = '<span class="live-pulse">● LIVE</span> - Music Stopped';
             }
         };
 
@@ -120,6 +129,7 @@
             if(currentMusicSource) currentMusicSource.stop();
             songFiles = [];
             renderPlaylist();
+            status.innerText = "System Reset";
         };
 
         window.deleteSong = (index, event) => {
@@ -134,7 +144,7 @@
         function renderPlaylist() {
             playlistUI.innerHTML = "";
             if (songFiles.length === 0) {
-                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist empty.</p>';
+                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">No music loaded.</p>';
                 return;
             }
             songFiles.forEach((file, index) => {
@@ -152,24 +162,19 @@
         async function playSong(index) {
             if (!audioCtx) return alert("Tap 'START SYSTEM' first!");
             if (currentMusicSource) try { currentMusicSource.stop(); } catch(e) {}
-
             try {
                 const file = songFiles[index];
                 const arrayBuffer = await file.arrayBuffer();
                 const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-                
                 currentMusicSource = audioCtx.createBufferSource();
                 currentMusicSource.buffer = audioBuffer;
                 currentMusicSource.connect(musicGain);
                 currentMusicSource.start(0);
-
                 document.querySelectorAll('.song-item').forEach((el, i) => {
                     el.classList.toggle('active', i === index);
                 });
-                status.innerHTML = `<span class="live-pulse">● LIVE</span> - ${file.name}`;
-            } catch (err) {
-                status.innerText = "Error playing file.";
-            }
+                status.innerHTML = `<span class="live-pulse">● LIVE</span> - Playing: ${file.name}`;
+            } catch (err) { status.innerText = "Error playing file."; }
         }
 
         musicVolSlider.oninput = () => { if (musicGain) musicGain.gain.value = musicVolSlider.value; };
