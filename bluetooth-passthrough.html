@@ -3,58 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Mic Router</title>
+    <title>Mic & Music Mixer</title>
     <style>
-        body { font-family: sans-serif; text-align: center; padding: 50px; background: #121212; color: white; }
-        button { padding: 20px 40px; font-size: 1.2rem; cursor: pointer; border-radius: 50px; border: none; background: #007AFF; color: white; }
-        .status { margin-top: 20px; color: #888; }
+        body { font-family: -apple-system, sans-serif; text-align: center; padding: 30px; background: #1a1a1a; color: white; }
+        .card { background: #2a2a2a; padding: 20px; border-radius: 20px; margin-bottom: 20px; }
+        button { width: 100%; padding: 15px; font-size: 1rem; border-radius: 10px; border: none; background: #007AFF; color: white; font-weight: bold; margin-top: 10px; }
+        input[type="file"] { margin: 10px 0; color: #888; }
+        .slider-label { display: block; margin-top: 15px; font-size: 0.9rem; color: #ccc; }
+        input[type="range"] { width: 100%; margin-top: 5px; }
+        #status { margin-top: 20px; font-size: 0.8rem; color: #00FF00; }
     </style>
 </head>
 <body>
-    <h2>Live Mic-to-Speaker</h2>
-    <p>Connect your Lightning Mic & BT Speaker first.</p>
-    <button id="startBtn">START BROADCAST</button>
-    <div id="status" class="status">Status: Standby</div>
+
+    <div class="card">
+        <h3>1. Background Music</h3>
+        <input type="file" id="musicFile" accept="audio/*">
+        <label class="slider-label">Music Volume</label>
+        <input type="range" id="volumeSlider" min="0" max="1" step="0.1" value="0.5">
+    </div>
+
+    <div class="card">
+        <h3>2. Live Broadcast</h3>
+        <button id="startBtn">START MIXER</button>
+        <div id="status">Status: Ready</div>
+    </div>
 
     <script>
         const btn = document.getElementById('startBtn');
+        const fileInput = document.getElementById('musicFile');
+        const volumeSlider = document.getElementById('volumeSlider');
         const status = document.getElementById('status');
-        let audioContext;
+        
+        let audioCtx, micSource, musicSource, gainNode;
 
         btn.onclick = async () => {
-            if (!audioContext) {
+            if (!audioCtx) {
                 try {
-                    // 1. Initialize Audio Context
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)({
-                        latencyHint: 'interactive' // Request lowest possible latency
-                    });
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Setup Microphone
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } });
+                    micSource = audioCtx.createMediaStreamSource(stream);
 
-                    // 2. Request Mic Access
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: {
-                            echoCancellation: false, // Turn off to reduce delay
-                            noiseSuppression: false,
-                            autoGainControl: false
-                        } 
-                    });
+                    // Setup Music Gain (Volume)
+                    gainNode = audioCtx.createGain();
+                    gainNode.gain.value = volumeSlider.value;
 
-                    // 3. Route Input to Output
-                    const source = audioContext.createMediaStreamSource(stream);
-                    source.connect(audioContext.destination);
+                    // Setup Music File
+                    if (fileInput.files[0]) {
+                        const fileReader = new FileReader();
+                        fileReader.onload = async (e) => {
+                            const buffer = await audioCtx.decodeAudioData(e.target.result);
+                            musicSource = audioCtx.createBufferSource();
+                            musicSource.buffer = buffer;
+                            musicSource.loop = true;
+                            
+                            // Routing: Music -> Volume Control -> Destination
+                            musicSource.connect(gainNode);
+                            gainNode.connect(audioCtx.destination);
+                            musicSource.start(0);
+                        };
+                        fileReader.readAsArrayBuffer(fileInput.files[0]);
+                    }
 
-                    status.innerText = "Status: LIVE (Check BT Speaker)";
-                    btn.innerText = "STOP";
+                    // Routing: Mic -> Destination
+                    micSource.connect(audioCtx.destination);
+
+                    status.innerText = "Status: BROADCASTING LIVE";
+                    btn.innerText = "STOP ALL";
                     btn.style.background = "#FF3B30";
+
                 } catch (err) {
                     status.innerText = "Error: " + err.message;
                 }
             } else {
-                audioContext.close();
-                audioContext = null;
-                status.innerText = "Status: Stopped";
-                btn.innerText = "START BROADCAST";
-                btn.style.background = "#007AFF";
+                location.reload(); // Simplest way to stop all audio nodes
             }
+        };
+
+        // Real-time volume update
+        volumeSlider.oninput = () => {
+            if (gainNode) gainNode.gain.value = volumeSlider.value;
         };
     </script>
 </body>
