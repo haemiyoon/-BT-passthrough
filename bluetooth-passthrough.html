@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yoga Pro: Always-On Mixer</title>
+    <title>Yoga Pro: Persistent Mixer</title>
     <style>
         :root { --primary: #0ea5e9; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --mic-accent: #10b981; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
@@ -17,16 +17,17 @@
         
         label { display: block; font-size: 0.7rem; color: #94a3b8; margin-bottom: 8px; font-weight: 800; text-transform: uppercase; }
         input[type="range"] { width: 100%; height: 10px; border-radius: 10px; background: #475569; outline: none; accent-color: var(--primary); -webkit-appearance: none; }
-        #micVol { accent-color: var(--mic-accent); }
         
-        .custom-file-upload { display: block; background: #334155; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.8rem; margin-top: 15px; color: #cbd5e1; }
+        .file-controls { display: flex; gap: 10px; margin-top: 15px; }
+        .custom-file-upload { flex: 2; background: #334155; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.8rem; color: #cbd5e1; }
+        .clear-btn { flex: 1; background: #475569; color: white; border: none; border-radius: 12px; font-size: 0.7rem; font-weight: bold; cursor: pointer; }
         
         .playlist { flex-grow: 1; overflow-y: auto; background: var(--card); border-radius: 20px; padding: 10px; margin-top: 10px; border: 1px solid #334155; }
-        .song-item { padding: 18px; margin-bottom: 8px; background: #475569; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; }
+        .song-item { padding: 18px; margin-bottom: 8px; background: #475569; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; position: relative; }
         .song-item.active { border-left: 5px solid var(--primary); background: #0c4a6e; }
+        .delete-song { color: #ef4444; font-weight: bold; padding: 5px 10px; }
         
         #status-bar { text-align: center; font-size: 0.75rem; color: #10b981; margin-top: 10px; font-weight: bold; }
-        .stop-btn { background: #ef4444; color: white; border: none; padding: 10px; border-radius: 10px; margin-top: 10px; width: 100%; font-weight: bold; font-size: 0.8rem; }
     </style>
 </head>
 <body>
@@ -36,30 +37,30 @@
         
         <div class="mixer-grid">
             <div class="vol-box">
-                <label>Voice Level</label>
+                <label>Voice</label>
                 <input type="range" id="micVol" min="0" max="2" step="0.1" value="1.0">
             </div>
             <div class="vol-box">
-                <label>Music Level</label>
+                <label>Music</label>
                 <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.4">
             </div>
         </div>
 
-        <label class="custom-file-upload">
-            2. LOAD CLASS PLAYLIST
-            <input type="file" id="filePicker" multiple accept="*/*" style="display:none;">
-        </label>
-        <div id="status-bar">Waiting...</div>
-        <button class="stop-btn" onclick="location.reload()">Emergency Reset (Stop All)</button>
+        <div class="file-controls">
+            <label class="custom-file-upload">
+                ADD SONGS (A-Z SORT)
+                <input type="file" id="filePicker" multiple accept="*/*" style="display:none;">
+            </label>
+            <button class="clear-btn" id="clearList">CLEAR ALL</button>
+        </div>
+        <div id="status-bar">Ready for Yoga...</div>
     </div>
 
-    <div class="playlist" id="playlistUI">
-        <p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist Empty</p>
-    </div>
+    <div class="playlist" id="playlistUI"></div>
 
     <script>
-        let audioCtx, micSource, currentMusicSource, musicGain, micGain, wakeLock = null;
-        let songFiles = [];
+        let audioCtx, currentMusicSource, musicGain, micGain, wakeLock = null;
+        let songFiles = []; // This holds the actual File objects
 
         const micBtn = document.getElementById('micBtn');
         const status = document.getElementById('status-bar');
@@ -67,26 +68,16 @@
         const playlistUI = document.getElementById('playlistUI');
         const musicVolSlider = document.getElementById('musicVol');
         const micVolSlider = document.getElementById('micVol');
+        const clearBtn = document.getElementById('clearList');
 
-        // Function to keep screen on
-        const requestWakeLock = async () => {
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLock = await navigator.wakeLock.request('screen');
-                    console.log('Wake Lock is active');
-                }
-            } catch (err) {
-                console.error(`${err.name}, ${err.message}`);
-            }
-        };
+        // Initial setup
+        renderPlaylist();
 
         micBtn.onclick = async () => {
             if (!audioCtx) {
                 try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    
-                    // Keep Screen Awake
-                    await requestWakeLock();
+                    if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen');
 
                     musicGain = audioCtx.createGain();
                     musicGain.gain.value = musicVolSlider.value;
@@ -97,19 +88,15 @@
                     micGain.connect(audioCtx.destination);
 
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: { 
-                            echoCancellation: false, 
-                            noiseSuppression: false,
-                            autoGainControl: false
-                        } 
+                        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                     });
                     
-                    micSource = audioCtx.createMediaStreamSource(stream);
+                    const micSource = audioCtx.createMediaStreamSource(stream);
                     micSource.connect(micGain);
 
                     micBtn.innerText = "SYSTEM LIVE & AWAKE";
                     micBtn.style.background = "#10b981";
-                    status.innerText = "SCREEN UNLOCKED - MIC LIVE";
+                    status.innerText = "SCREEN ON - MIC LIVE";
                 } catch (err) {
                     alert("Activation Error: " + err.message);
                 }
@@ -117,23 +104,48 @@
         };
 
         filePicker.onchange = (e) => {
-            songFiles = Array.from(e.target.files);
+            const newFiles = Array.from(e.target.files);
+            // Combine with existing, filter duplicates by name
+            const combined = [...songFiles, ...newFiles];
+            songFiles = combined.filter((v,i,a)=>a.findIndex(t=>(t.name===v.name))===i);
+            
+            // SORT ALPHABETICALLY
+            songFiles.sort((a, b) => a.name.localeCompare(b.name));
+            
             renderPlaylist();
         };
 
+        clearBtn.onclick = () => {
+            songFiles = [];
+            renderPlaylist();
+        };
+
+        function deleteSong(index, event) {
+            event.stopPropagation(); // Don't play the song when clicking delete
+            songFiles.splice(index, 1);
+            renderPlaylist();
+        }
+
         function renderPlaylist() {
             playlistUI.innerHTML = "";
+            if (songFiles.length === 0) {
+                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist Empty</p>';
+                return;
+            }
             songFiles.forEach((file, index) => {
                 const item = document.createElement('div');
                 item.className = 'song-item';
-                item.innerHTML = `<div>${file.name}</div><small>TAP</small>`;
+                item.innerHTML = `
+                    <div class="song-name">${file.name}</div>
+                    <div class="delete-song" onclick="deleteSong(${index}, event)">✕</div>
+                `;
                 item.onclick = () => playSong(index);
                 playlistUI.appendChild(item);
             });
         }
 
         async function playSong(index) {
-            if (!audioCtx) return alert("Tap Step 1 first!");
+            if (!audioCtx) return alert("Tap 'ACTIVATE' first!");
             if (currentMusicSource) try { currentMusicSource.stop(); } catch(e) {}
 
             try {
@@ -157,13 +169,6 @@
 
         musicVolSlider.oninput = () => { if (musicGain) musicGain.gain.value = musicVolSlider.value; };
         micVolSlider.oninput = () => { if (micGain) micGain.gain.value = micVolSlider.value; };
-
-        // Re-request wake lock if tab is hidden then shown again
-        document.addEventListener('visibilitychange', async () => {
-            if (wakeLock !== null && document.visibilityState === 'visible') {
-                await requestWakeLock();
-            }
-        });
     </script>
 </body>
 </html>
