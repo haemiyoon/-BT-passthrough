@@ -2,131 +2,159 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yoga Live Mixer Pro</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Yoga Flow Mixer</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: white; padding: 20px; display: flex; flex-direction: column; height: 100vh; margin: 0; box-sizing: border-box; }
-        .controls { background: #1e293b; padding: 25px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
-        .playlist { flex-grow: 1; overflow-y: auto; background: #1e293b; border-radius: 20px; padding: 15px; border: 1px solid #334155; }
-        .song-item { padding: 20px; margin-bottom: 12px; background: #334155; border-radius: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
-        .song-item.active { background: #0ea5e9; transform: scale(1.02); box-shadow: 0 0 15px rgba(14, 165, 233, 0.4); }
-        button { background: #0ea5e9; color: white; border: none; padding: 18px; border-radius: 12px; font-size: 1.1rem; font-weight: bold; width: 100%; margin-bottom: 15px; cursor: pointer; }
-        .vol-row { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
-        input[type="range"] { width: 100%; height: 15px; border-radius: 5px; background: #334155; accent-color: #0ea5e9; }
-        #micStatus { font-size: 0.9rem; text-align: center; color: #94a3b8; margin-bottom: 10px; }
-        .file-label { display: block; background: #334155; padding: 10px; border-radius: 8px; text-align: center; font-size: 0.8rem; border: 1px dashed #64748b; }
+        :root { --primary: #0ea5e9; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; }
+        body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+        
+        .header-card { background: var(--card); padding: 20px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+        
+        button#micBtn { background: var(--primary); color: white; border: none; padding: 20px; border-radius: 15px; font-size: 1.2rem; font-weight: 800; width: 100%; cursor: pointer; transition: transform 0.1s; }
+        button#micBtn:active { transform: scale(0.98); }
+        
+        .vol-container { margin-top: 20px; }
+        label { display: block; font-size: 0.9rem; color: #94a3b8; margin-bottom: 8px; font-weight: 600; }
+        input[type="range"] { width: 100%; height: 12px; border-radius: 10px; background: #334155; outline: none; accent-color: var(--primary); -webkit-appearance: none; }
+        
+        .file-input-wrapper { margin-top: 20px; }
+        .custom-file-upload { display: block; background: #334155; padding: 15px; border-radius: 12px; text-align: center; border: 2px dashed #64748b; cursor: pointer; font-size: 0.9rem; }
+        
+        .playlist { flex-grow: 1; overflow-y: auto; background: var(--card); border-radius: 20px; padding: 10px; margin-top: 10px; }
+        .song-item { padding: 20px; margin-bottom: 10px; background: #334155; border-radius: 15px; display: flex; justify-content: space-between; align-items: center; border: 2px solid transparent; }
+        .song-item.active { border-color: var(--primary); background: #0c4a6e; }
+        .song-name { font-weight: 600; font-size: 1rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70%; }
+        .play-label { font-size: 0.75rem; font-weight: 800; color: var(--primary); text-transform: uppercase; }
+
+        #status-bar { text-align: center; font-size: 0.8rem; margin-top: 10px; color: #64748b; }
     </style>
 </head>
 <body>
 
-    <div class="controls">
-        <button id="micBtn">1. ACTIVATE SYSTEM</button>
-        <div id="micStatus">Status: System Standby</div>
-        
-        <div class="vol-row">
-            <label>Music Volume Level</label>
-            <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.4">
+    <div class="header-card">
+        <button id="micBtn">1. TAP TO START SYSTEM</button>
+        <div id="status-bar">System Ready</div>
+
+        <div class="vol-container">
+            <label>MUSIC VOLUME</label>
+            <input type="range" id="volSlider" min="0" max="1" step="0.01" value="0.4">
         </div>
-        
-        <div style="margin-top: 20px;">
-            <label class="file-label">
-                2. LOAD CLASS TRACKS (.m4a, .m4v, .mp4)
-                <input type="file" id="filePicker" multiple accept="audio/*,video/x-m4v,video/mp4" style="display:none;">
+
+        <div class="file-input-wrapper">
+            <label class="custom-file-upload">
+                2. LOAD CLASS FILES (.m4a, .m4v, etc)
+                <input type="file" id="filePicker" multiple accept="*/*" style="display:none;">
             </label>
         </div>
     </div>
 
     <div class="playlist" id="playlistUI">
-        <p style="text-align:center; color: #64748b; margin-top: 50px;">Playlist is empty.<br>Load files to begin your session.</p>
+        <p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist is currently empty.</p>
     </div>
 
     <script>
         let audioCtx, micSource, currentMusicSource, musicGain;
-        const playlistUI = document.getElementById('playlistUI');
-        const filePicker = document.getElementById('filePicker');
-        const volSlider = document.getElementById('volSlider');
-        const micBtn = document.getElementById('micBtn');
-        let songData = [];
+        let songFiles = [];
 
-        // Initialize Audio and Mic
+        const micBtn = document.getElementById('micBtn');
+        const status = document.getElementById('status-bar');
+        const filePicker = document.getElementById('filePicker');
+        const playlistUI = document.getElementById('playlistUI');
+        const volSlider = document.getElementById('volSlider');
+
+        // Step 1: Activate Audio Context & Mic
         micBtn.onclick = async () => {
             if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                musicGain = audioCtx.createGain();
-                musicGain.gain.value = volSlider.value;
-                musicGain.connect(audioCtx.destination);
-
                 try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // Create a gain node for music volume
+                    musicGain = audioCtx.createGain();
+                    musicGain.gain.value = volSlider.value;
+                    musicGain.connect(audioCtx.destination);
+
+                    // Setup Microphone (Lightning/USB-C Receiver)
                     const stream = await navigator.mediaDevices.getUserMedia({ 
                         audio: { 
-                            echoCancellation: false,
+                            echoCancellation: false, 
                             noiseSuppression: false,
-                            autoGainControl: false 
+                            autoGainControl: false
                         } 
                     });
-                    micSource = audioCtx.createMediaStreamSource(stream);
-                    micSource.connect(audioCtx.destination);
                     
+                    micSource = audioCtx.createMediaStreamSource(stream);
+                    micSource.connect(audioCtx.destination); // Connect Mic directly to output
+
                     micBtn.innerText = "SYSTEM ACTIVE";
-                    micBtn.style.background = "#22c55e";
-                    document.getElementById('micStatus').innerText = "Mic & Mixer are LIVE";
-                } catch (e) {
-                    alert("Please allow microphone access to use this app.");
+                    micBtn.style.background = "#10b981";
+                    status.innerText = "Broadcasting Mic + Music Mixer";
+                } catch (err) {
+                    alert("Error starting mic: " + err.message);
                 }
             }
         };
 
-        // File Loading Logic
+        // Step 2: Handle File Selection
         filePicker.onchange = (e) => {
-            songData = Array.from(e.target.files);
+            songFiles = Array.from(e.target.files);
             renderPlaylist();
         };
 
         function renderPlaylist() {
             playlistUI.innerHTML = "";
-            if (songData.length === 0) {
-                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 50px;">No files selected.</p>';
-                return;
-            }
-            songData.forEach((file, index) => {
-                const div = document.createElement('div');
-                div.className = 'song-item';
-                div.innerHTML = `<span>${file.name.split('.').slice(0, -1).join('.')}</span><small style="color:#64748b">PLAY</small>`;
-                div.onclick = () => playSong(index);
-                playlistUI.appendChild(div);
+            if (songFiles.length === 0) return;
+
+            songFiles.forEach((file, index) => {
+                const item = document.createElement('div');
+                item.className = 'song-item';
+                item.innerHTML = `
+                    <div class="song-name">${file.name}</div>
+                    <div class="play-label" id="label-${index}">Ready</div>
+                `;
+                item.onclick = () => playSong(index);
+                playlistUI.appendChild(item);
             });
         }
 
-        // Playback Logic
+        // Step 3: Play Music with Audio Extraction
         async function playSong(index) {
             if (!audioCtx) {
-                alert("Please tap 'ACTIVATE SYSTEM' first!");
+                alert("Please tap Step 1: START SYSTEM first!");
                 return;
             }
-            
+
+            // Stop any music currently playing
             if (currentMusicSource) {
                 try { currentMusicSource.stop(); } catch(e) {}
             }
-            
-            const file = songData[index];
-            const arrayBuffer = await file.arrayBuffer();
-            
-            // This handles both audio and video containers
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            
-            currentMusicSource = audioCtx.createBufferSource();
-            currentMusicSource.buffer = audioBuffer;
-            currentMusicSource.connect(musicGain);
-            currentMusicSource.start(0);
 
-            // UI Feedback
-            document.querySelectorAll('.song-item').forEach((el, i) => {
-                el.classList.toggle('active', i === index);
-                el.querySelector('small').innerText = (i === index) ? "NOW PLAYING" : "PLAY";
-            });
+            status.innerText = "Loading track...";
+            
+            try {
+                const file = songFiles[index];
+                const arrayBuffer = await file.arrayBuffer();
+                const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+                
+                currentMusicSource = audioCtx.createBufferSource();
+                currentMusicSource.buffer = audioBuffer;
+                currentMusicSource.connect(musicGain);
+                currentMusicSource.start(0);
+
+                // Update UI State
+                document.querySelectorAll('.song-item').forEach((el, i) => {
+                    el.classList.toggle('active', i === index);
+                    const label = el.querySelector('.play-label');
+                    label.innerText = (i === index) ? "NOW PLAYING" : "Ready";
+                });
+                status.innerText = "Playing: " + file.name;
+
+            } catch (err) {
+                alert("Could not play this file. Make sure it's a valid audio/video file.");
+                status.innerText = "Error playing file.";
+            }
         }
 
-        // Volume Change
+        // Continuous Volume Update
         volSlider.oninput = () => {
             if (musicGain) musicGain.gain.value = volSlider.value;
         };
