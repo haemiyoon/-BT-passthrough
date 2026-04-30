@@ -3,37 +3,41 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yoga Live Mixer</title>
+    <title>Yoga Live Mixer Pro</title>
     <style>
-        body { font-family: -apple-system, sans-serif; background: #0f172a; color: white; padding: 20px; display: flex; flex-direction: column; height: 100vh; margin: 0; }
-        .controls { background: #1e293b; padding: 20px; border-radius: 15px; margin-bottom: 15px; }
-        .playlist { flex-grow: 1; overflow-y: auto; background: #1e293b; border-radius: 15px; padding: 10px; }
-        .song-item { padding: 15px; margin-bottom: 8px; background: #334155; border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
-        .song-item.active { background: #0ea5e9; border: 2px solid #38bdf8; }
-        button { background: #0ea5e9; color: white; border: none; padding: 12px; border-radius: 8px; font-weight: bold; width: 100%; margin-bottom: 10px; }
-        .vol-row { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
-        input[type="range"] { width: 100%; }
-        #micStatus { font-size: 0.8rem; text-align: center; color: #94a3b8; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: white; padding: 20px; display: flex; flex-direction: column; height: 100vh; margin: 0; box-sizing: border-box; }
+        .controls { background: #1e293b; padding: 25px; border-radius: 20px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .playlist { flex-grow: 1; overflow-y: auto; background: #1e293b; border-radius: 20px; padding: 15px; border: 1px solid #334155; }
+        .song-item { padding: 20px; margin-bottom: 12px; background: #334155; border-radius: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s; }
+        .song-item.active { background: #0ea5e9; transform: scale(1.02); box-shadow: 0 0 15px rgba(14, 165, 233, 0.4); }
+        button { background: #0ea5e9; color: white; border: none; padding: 18px; border-radius: 12px; font-size: 1.1rem; font-weight: bold; width: 100%; margin-bottom: 15px; cursor: pointer; }
+        .vol-row { display: flex; flex-direction: column; gap: 8px; margin-top: 15px; }
+        input[type="range"] { width: 100%; height: 15px; border-radius: 5px; background: #334155; accent-color: #0ea5e9; }
+        #micStatus { font-size: 0.9rem; text-align: center; color: #94a3b8; margin-bottom: 10px; }
+        .file-label { display: block; background: #334155; padding: 10px; border-radius: 8px; text-align: center; font-size: 0.8rem; border: 1px dashed #64748b; }
     </style>
 </head>
 <body>
 
     <div class="controls">
-        <button id="micBtn">1. ENABLE MIC & SYSTEM</button>
-        <div id="micStatus">Mic Status: Off</div>
+        <button id="micBtn">1. ACTIVATE SYSTEM</button>
+        <div id="micStatus">Status: System Standby</div>
         
         <div class="vol-row">
-            <label>Music Volume</label>
+            <label>Music Volume Level</label>
             <input type="range" id="volSlider" min="0" max="1" step="0.05" value="0.4">
         </div>
         
-        <label style="display:block; margin-top:15px; font-size: 0.9rem;">2. LOAD CLASS PLAYLIST</label>
-<input type="file" id="filePicker" multiple accept="audio/*,video/x-m4v,video/mp4" style="font-size: 0.8rem;">
-
+        <div style="margin-top: 20px;">
+            <label class="file-label">
+                2. LOAD CLASS TRACKS (.m4a, .m4v, .mp4)
+                <input type="file" id="filePicker" multiple accept="audio/*,video/x-m4v,video/mp4" style="display:none;">
+            </label>
+        </div>
     </div>
 
     <div class="playlist" id="playlistUI">
-        <p style="text-align:center; color: #64748b;">No songs loaded yet.</p>
+        <p style="text-align:center; color: #64748b; margin-top: 50px;">Playlist is empty.<br>Load files to begin your session.</p>
     </div>
 
     <script>
@@ -44,7 +48,7 @@
         const micBtn = document.getElementById('micBtn');
         let songData = [];
 
-        // 1. Initialize Audio and Microphone
+        // Initialize Audio and Mic
         micBtn.onclick = async () => {
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -53,19 +57,26 @@
                 musicGain.connect(audioCtx.destination);
 
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false } });
+                    const stream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: { 
+                            echoCancellation: false,
+                            noiseSuppression: false,
+                            autoGainControl: false 
+                        } 
+                    });
                     micSource = audioCtx.createMediaStreamSource(stream);
                     micSource.connect(audioCtx.destination);
+                    
                     micBtn.innerText = "SYSTEM ACTIVE";
                     micBtn.style.background = "#22c55e";
-                    document.getElementById('micStatus').innerText = "Mic is LIVE to Speakers";
+                    document.getElementById('micStatus').innerText = "Mic & Mixer are LIVE";
                 } catch (e) {
-                    alert("Microphone access denied.");
+                    alert("Please allow microphone access to use this app.");
                 }
             }
         };
 
-        // 2. Handle File Loading
+        // File Loading Logic
         filePicker.onchange = (e) => {
             songData = Array.from(e.target.files);
             renderPlaylist();
@@ -73,23 +84,34 @@
 
         function renderPlaylist() {
             playlistUI.innerHTML = "";
+            if (songData.length === 0) {
+                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 50px;">No files selected.</p>';
+                return;
+            }
             songData.forEach((file, index) => {
                 const div = document.createElement('div');
                 div.className = 'song-item';
-                div.innerHTML = `<span>${file.name.replace('.m4a', '')}</span>`;
+                div.innerHTML = `<span>${file.name.split('.').slice(0, -1).join('.')}</span><small style="color:#64748b">PLAY</small>`;
                 div.onclick = () => playSong(index);
                 playlistUI.appendChild(div);
             });
         }
 
-        // 3. Play selected song
+        // Playback Logic
         async function playSong(index) {
-            if (!audioCtx) return alert("Please tap 'Enable Mic' first!");
+            if (!audioCtx) {
+                alert("Please tap 'ACTIVATE SYSTEM' first!");
+                return;
+            }
             
-            if (currentMusicSource) currentMusicSource.stop();
+            if (currentMusicSource) {
+                try { currentMusicSource.stop(); } catch(e) {}
+            }
             
             const file = songData[index];
             const arrayBuffer = await file.arrayBuffer();
+            
+            // This handles both audio and video containers
             const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
             
             currentMusicSource = audioCtx.createBufferSource();
@@ -97,13 +119,17 @@
             currentMusicSource.connect(musicGain);
             currentMusicSource.start(0);
 
-            // Update UI
+            // UI Feedback
             document.querySelectorAll('.song-item').forEach((el, i) => {
                 el.classList.toggle('active', i === index);
+                el.querySelector('small').innerText = (i === index) ? "NOW PLAYING" : "PLAY";
             });
         }
 
-        volSlider.oninput = () => { if (musicGain) musicGain.gain.value = volSlider.value; };
+        // Volume Change
+        volSlider.oninput = () => {
+            if (musicGain) musicGain.gain.value = volSlider.value;
+        };
     </script>
 </body>
 </html>
