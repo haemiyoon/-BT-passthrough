@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Yoga Pro: Mic-First Mixer</title>
+    <title>Yoga Pro: Balanced Mixer</title>
     <style>
         :root { --primary: #0ea5e9; --bg: #0f172a; --card: #1e293b; --text: #f8fafc; --mic-accent: #10b981; }
         body { font-family: -apple-system, system-ui, sans-serif; background: var(--bg); color: var(--text); padding: 20px; margin: 0; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
         
         .header-card { background: var(--card); padding: 20px; border-radius: 20px; margin-bottom: 15px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
         
-        button#micBtn { background: var(--primary); color: white; border: none; padding: 18px; border-radius: 15px; font-size: 1.1rem; font-weight: 800; width: 100%; cursor: pointer; margin-bottom: 10px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); }
+        button#micBtn { background: var(--primary); color: white; border: none; padding: 18px; border-radius: 15px; font-size: 1.1rem; font-weight: 800; width: 100%; cursor: pointer; margin-bottom: 10px; }
         
         .mixer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 5px; }
         .vol-box { background: #334155; padding: 12px; border-radius: 12px; text-align: center; }
@@ -45,16 +45,16 @@
             </div>
             <div class="vol-box">
                 <label>Music Track</label>
-                <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.4">
+                <input type="range" id="musicVol" min="0" max="1" step="0.05" value="0.25">
             </div>
         </div>
 
         <div class="file-controls">
             <label class="custom-file-upload">
-                + ADD MUSIC (OPTIONAL)
+                + ADD MUSIC
                 <input type="file" id="filePicker" multiple accept="*/*" style="display:none;">
             </label>
-            <button class="clear-btn" id="clearList">RESET LIST</button>
+            <button class="clear-btn" id="clearList">RESET</button>
         </div>
         <div id="status-bar">System Standby</div>
     </div>
@@ -80,28 +80,20 @@
                 try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                     
-                    // Request Wake Lock to keep screen on
                     if ('wakeLock' in navigator) {
                         try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
                     }
 
-                    // 1. Setup Music Gain Node
                     musicGain = audioCtx.createGain();
                     musicGain.gain.value = musicVolSlider.value;
                     musicGain.connect(audioCtx.destination);
 
-                    // 2. Setup Mic Gain Node
                     micGain = audioCtx.createGain();
                     micGain.gain.value = micVolSlider.value;
                     micGain.connect(audioCtx.destination);
 
-                    // 3. Request Mic Access (Lightning/USB Receiver)
                     const stream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: { 
-                            echoCancellation: false, 
-                            noiseSuppression: false, 
-                            autoGainControl: false 
-                        } 
+                        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                     });
                     
                     const micSource = audioCtx.createMediaStreamSource(stream);
@@ -109,9 +101,9 @@
 
                     micBtn.innerText = "SYSTEM ACTIVE";
                     micBtn.style.background = "#10b981";
-                    status.innerHTML = '<span class="live-pulse">● LIVE</span> - Mic is active';
+                    status.innerHTML = '<span class="live-pulse">● LIVE</span> - Ready for Class';
                 } catch (err) {
-                    alert("System failed to start. Check permissions.");
+                    alert("Check microphone permissions.");
                 }
             }
         };
@@ -119,7 +111,6 @@
         filePicker.onchange = (e) => {
             const newFiles = Array.from(e.target.files);
             const combined = [...songFiles, ...newFiles];
-            // Sort Alphabetically
             songFiles = combined.filter((v,i,a)=>a.findIndex(t=>(t.name===v.name))===i);
             songFiles.sort((a, b) => a.name.localeCompare(b.name));
             renderPlaylist();
@@ -143,7 +134,7 @@
         function renderPlaylist() {
             playlistUI.innerHTML = "";
             if (songFiles.length === 0) {
-                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist empty. Use the + button above to add tracks.</p>';
+                playlistUI.innerHTML = '<p style="text-align:center; color: #64748b; margin-top: 40px;">Playlist empty.</p>';
                 return;
             }
             songFiles.forEach((file, index) => {
@@ -175,9 +166,9 @@
                 document.querySelectorAll('.song-item').forEach((el, i) => {
                     el.classList.toggle('active', i === index);
                 });
-                status.innerHTML = `<span class="live-pulse">● LIVE</span> - Playing: ${file.name}`;
+                status.innerHTML = `<span class="live-pulse">● LIVE</span> - ${file.name}`;
             } catch (err) {
-                status.innerText = "Playback error.";
+                status.innerText = "Error playing file.";
             }
         }
 
